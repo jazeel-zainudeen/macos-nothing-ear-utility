@@ -423,7 +423,7 @@ extension BluetoothManager {
         let casePct = state.casePercentage
         let isCaseCharging = state.isCaseCharging
         
-        if leftPct == nil && rightPct == nil && casePct == nil && !isLeftCharging && !isRightCharging && !isCaseCharging {
+        if leftPct == nil && rightPct == nil && casePct == nil {
             let fallback = NSImage(systemSymbolName: "earbuds", accessibilityDescription: "Nothing Ear") ?? NSImage()
             fallback.isTemplate = true
             return fallback
@@ -431,11 +431,6 @@ extension BluetoothManager {
         
         let fontConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         let budConfig = fontConfig.applying(NSImage.SymbolConfiguration(paletteColors: [NSColor.headerTextColor]))
-        let boltConfig = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
-        let boltImg = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Charging")?
-            .withSymbolConfiguration(boltConfig)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [NSColor.systemYellow]))
-        let boltWidth: CGFloat = boltImg?.size.width ?? 6.0
         
         let dotSize: CGFloat = 4.0
         let dotOverlap: CGFloat = 1.5
@@ -446,7 +441,6 @@ extension BluetoothManager {
             let icon: NSImage
             let opacity: CGFloat
             let dotColor: NSColor?
-            let isCharging: Bool
         }
         
         var units: [DeviceUnit] = []
@@ -456,8 +450,7 @@ extension BluetoothManager {
             units.append(DeviceUnit(
                 icon: img,
                 opacity: leftPct != nil ? 1.0 : 0.35,
-                dotColor: leftPct != nil ? chargeColor(for: leftPct) : nil,
-                isCharging: isLeftCharging
+                dotColor: leftPct != nil ? chargeColor(for: leftPct) : nil
             ))
         }
         
@@ -466,19 +459,17 @@ extension BluetoothManager {
             units.append(DeviceUnit(
                 icon: img,
                 opacity: rightPct != nil ? 1.0 : 0.35,
-                dotColor: rightPct != nil ? chargeColor(for: rightPct) : nil,
-                isCharging: isRightCharging
+                dotColor: rightPct != nil ? chargeColor(for: rightPct) : nil
             ))
         }
         
-        // Unit 3: Case (shown if casePct != nil or isCaseCharging)
-        if casePct != nil || isCaseCharging {
+        // Unit 3: Case (shown if casePct != nil)
+        if let cPct = casePct {
             if let caseImg = NSImage(systemSymbolName: "archivebox", accessibilityDescription: "Case")?.withSymbolConfiguration(budConfig) {
                 units.append(DeviceUnit(
                     icon: caseImg,
-                    opacity: casePct != nil ? 1.0 : 0.35,
-                    dotColor: casePct != nil ? chargeColor(for: casePct) : nil,
-                    isCharging: isCaseCharging
+                    opacity: 1.0,
+                    dotColor: chargeColor(for: cPct)
                 ))
             }
         }
@@ -487,9 +478,6 @@ extension BluetoothManager {
         var totalWidth: CGFloat = 0
         for (idx, u) in units.enumerated() {
             totalWidth += u.icon.size.width + (u.dotColor != nil ? extraDotW : 0)
-            if u.isCharging {
-                totalWidth += 1.0 + boltWidth
-            }
             if idx < units.count - 1 {
                 totalWidth += (idx == 0 ? pairSpacing : 4.0)
             }
@@ -519,14 +507,6 @@ extension BluetoothManager {
                 }
                 
                 curX += u.icon.size.width + (u.dotColor != nil ? extraDotW : 0)
-                
-                // Draw charging bolt if actively charging
-                if u.isCharging, let bolt = boltImg {
-                    curX += 1.0
-                    let bY = (rect.height - bolt.size.height) / 2.0
-                    bolt.draw(in: NSRect(x: curX, y: bY, width: bolt.size.width, height: bolt.size.height))
-                    curX += bolt.size.width
-                }
                 
                 if idx < units.count - 1 {
                     curX += (idx == 0 ? pairSpacing : 4.0)

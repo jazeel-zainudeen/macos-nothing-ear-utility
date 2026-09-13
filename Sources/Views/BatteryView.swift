@@ -210,21 +210,10 @@ struct BatteryRow: View {
                 }
                 .frame(width: 50, alignment: .trailing)
             } else {
-                HStack(spacing: 4) {
-                    if isCharging {
-                        Image(systemName: "bolt.fill")
-                            .font(.caption2)
-                            .foregroundColor(.yellow)
-                        Text("Charging")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text(emptyText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                Text(emptyText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
     }
