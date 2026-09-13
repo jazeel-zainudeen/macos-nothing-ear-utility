@@ -10,6 +10,16 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
     @Published public var isRefreshing: Bool = false
     @Published public var justRefreshed: Bool = false
     
+    // Hardware Configuration States
+    @Published public var ancMode: NothingEarProtocol.ANCMode = .off
+    @Published public var inEarDetectionEnabled: Bool = true
+    @Published public var lowLatencyEnabled: Bool = false
+    @Published public var bassEnhanceEnabled: Bool = false
+    @Published public var bassEnhanceLevel: Int = 3
+    @Published public var eqPreset: NothingEarProtocol.EQPreset = .balanced
+    @Published public var isRingingLeft: Bool = false
+    @Published public var isRingingRight: Bool = false
+    
     private var pollTimer: Timer?
     private var batteryQueryTimer: Timer?
     private var hoverTimer: Timer?
@@ -241,6 +251,55 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
         }
     }
     
+    // MARK: - Hardware Control Methods
+    
+    public func setANCMode(_ mode: NothingEarProtocol.ANCMode) {
+        ancMode = mode
+        sendPacket(NothingEarProtocol.createSetANCFrame(mode: mode))
+        log("[NothingEar] Set ANC mode: \(mode.title)")
+    }
+    
+    public func setInEarDetection(enabled: Bool) {
+        inEarDetectionEnabled = enabled
+        sendPacket(NothingEarProtocol.createSetInEarFrame(enable: enabled))
+        log("[NothingEar] Set In-Ear detection: \(enabled)")
+    }
+    
+    public func setLowLatency(enabled: Bool) {
+        lowLatencyEnabled = enabled
+        sendPacket(NothingEarProtocol.createSetLowLatencyFrame(enable: enabled))
+        log("[NothingEar] Set Low Latency mode: \(enabled)")
+    }
+    
+    public func setEnhancedBass(enabled: Bool, level: Int = 3) {
+        bassEnhanceEnabled = enabled
+        bassEnhanceLevel = level
+        sendPacket(NothingEarProtocol.createSetEnhancedBassFrame(enable: enabled, level: level))
+        log("[NothingEar] Set Bass Enhance: enabled=\(enabled), level=\(level)")
+    }
+    
+    public func setEQPreset(_ preset: NothingEarProtocol.EQPreset) {
+        eqPreset = preset
+        sendPacket(NothingEarProtocol.createSetEQFrame(preset: preset))
+        log("[NothingEar] Set EQ Preset: \(preset.title)")
+    }
+    
+    public func ringBud(isLeft: Bool, ring: Bool) {
+        if isLeft { isRingingLeft = ring } else { isRingingRight = ring }
+        sendPacket(NothingEarProtocol.createRingBudsFrame(earbud: isLeft ? 0x02 : 0x03, start: ring))
+        log("[NothingEar] Ring bud: \(isLeft ? "Left" : "Right"), ring=\(ring)")
+    }
+    
+    public func sendPacket(_ bytes: [UInt8]) {
+        guard let ch = rfcommChannel, ch.isOpen() else {
+            log("[NothingEar] Cannot send packet: RFCOMM channel not open")
+            return
+        }
+        var data = bytes
+        let result = ch.writeSync(&data, length: UInt16(data.count))
+        log("[NothingEar] Sent packet (len: \(bytes.count), write result: \(result))")
+    }
+    
     // MARK: - IOBluetoothRFCOMMChannelDelegate
     
     public func rfcommChannelOpenComplete(_ ch: IOBluetoothRFCOMMChannel!, status: IOReturn) {
@@ -417,105 +476,25 @@ extension BluetoothManager {
     
     private func generateMenuBarImage(state: BatteryState) -> NSImage {
         let leftPct = state.leftPercentage
-        let isLeftCharging = state.isLeftCharging
         let rightPct = state.rightPercentage
-        let isRightCharging = state.isRightCharging
         let casePct = state.casePercentage
-        let isCaseCharging = state.isCaseCharging
         
-        if leftPct == nil && rightPct == nil && casePct == nil {
-            let fallback = NSImage(systemSymbolName: "earbuds", accessibilityDescription: "Nothing Ear") ?? NSImage()
-            fallback.isTemplate = true
-            return fallback
+        // Find the lowest active percentage among available components
+        var pcts: [Int] = []
+        if let l = leftPct { pcts.append(l) }
+        if let r = rightPct { pcts.append(r) }
+        if let c = casePct { pcts.append(c) }
+        
+        let dotColor: NSColor?
+        if let minPct = pcts.min() {
+            dotColor = chargeColor(for: minPct)
+        } else if earbuds.connectionState == .connected {
+            dotColor = NSColor.systemGreen
+        } else {
+            dotColor = nil
         }
         
-        let fontConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
-        let budConfig = fontConfig.applying(NSImage.SymbolConfiguration(paletteColors: [NSColor.headerTextColor]))
-        
-        let dotSize: CGFloat = 4.0
-        let dotOverlap: CGFloat = 1.5
-        let extraDotW = max(0, dotSize - dotOverlap)
-        let pairSpacing: CGFloat = 2.0
-        
-        struct DeviceUnit {
-            let icon: NSImage
-            let opacity: CGFloat
-            let dotColor: NSColor?
-        }
-        
-        var units: [DeviceUnit] = []
-        
-        // Unit 1: Left earbud
-        if let img = NSImage(systemSymbolName: "earbud.left", accessibilityDescription: "Left Earbud")?.withSymbolConfiguration(budConfig) {
-            units.append(DeviceUnit(
-                icon: img,
-                opacity: leftPct != nil ? 1.0 : 0.35,
-                dotColor: leftPct != nil ? chargeColor(for: leftPct) : nil
-            ))
-        }
-        
-        // Unit 2: Right earbud
-        if let img = NSImage(systemSymbolName: "earbud.right", accessibilityDescription: "Right Earbud")?.withSymbolConfiguration(budConfig) {
-            units.append(DeviceUnit(
-                icon: img,
-                opacity: rightPct != nil ? 1.0 : 0.35,
-                dotColor: rightPct != nil ? chargeColor(for: rightPct) : nil
-            ))
-        }
-        
-        // Unit 3: Case (shown if casePct != nil)
-        if let cPct = casePct {
-            if let caseImg = NSImage(systemSymbolName: "archivebox", accessibilityDescription: "Case")?.withSymbolConfiguration(budConfig) {
-                units.append(DeviceUnit(
-                    icon: caseImg,
-                    opacity: 1.0,
-                    dotColor: chargeColor(for: cPct)
-                ))
-            }
-        }
-        
-        // Calculate total width
-        var totalWidth: CGFloat = 0
-        for (idx, u) in units.enumerated() {
-            totalWidth += u.icon.size.width + (u.dotColor != nil ? extraDotW : 0)
-            if idx < units.count - 1 {
-                totalWidth += (idx == 0 ? pairSpacing : 4.0)
-            }
-        }
-        
-        let finalSize = NSSize(width: max(16.0, ceil(totalWidth)), height: 16.0)
-        let result = NSImage(size: finalSize, flipped: false) { rect in
-            var curX: CGFloat = 0
-            for (idx, u) in units.enumerated() {
-                // Draw uncolored bud icon
-                let yIcon = (rect.height - u.icon.size.height) / 2.0
-                let iconRect = NSRect(x: curX, y: yIcon, width: u.icon.size.width, height: u.icon.size.height)
-                u.icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: u.opacity)
-                
-                // Draw small colored charge indicator dot at top-right of device
-                if let dotCol = u.dotColor {
-                    let dotX = curX + u.icon.size.width - dotOverlap
-                    let dotY = rect.height - dotSize - 1.0
-                    let dotRect = NSRect(x: dotX, y: dotY, width: dotSize, height: dotSize)
-                    
-                    // Subtle background cutout for clear contrast
-                    NSColor.black.withAlphaComponent(0.4).setFill()
-                    NSBezierPath(ovalIn: dotRect.insetBy(dx: -0.5, dy: -0.5)).fill()
-                    
-                    dotCol.setFill()
-                    NSBezierPath(ovalIn: dotRect).fill()
-                }
-                
-                curX += u.icon.size.width + (u.dotColor != nil ? extraDotW : 0)
-                
-                if idx < units.count - 1 {
-                    curX += (idx == 0 ? pairSpacing : 4.0)
-                }
-            }
-            return true
-        }
-        result.isTemplate = false
-        return result
+        return NothingEarAssets.menuBarImage(dotColor: dotColor)
     }
 }
 

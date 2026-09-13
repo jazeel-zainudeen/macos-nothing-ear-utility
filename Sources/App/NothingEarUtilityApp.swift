@@ -17,7 +17,7 @@ struct NothingEarUtilityApp: App {
             SettingsView(bluetoothManager: bluetoothManager)
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 450, height: 300)
+        .defaultSize(width: 520, height: 420)
     }
 }
 
