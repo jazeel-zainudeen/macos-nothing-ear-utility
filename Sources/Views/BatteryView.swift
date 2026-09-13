@@ -37,7 +37,7 @@ struct BatteryView: View {
                         isCharging: bluetoothManager.earbuds.batteryState.isRightCharging
                     )
                     
-                    // Show Case battery only when the box is opened
+                    // Show Case battery when the box is opened or when charging
                     if let casePct = bluetoothManager.earbuds.batteryState.casePercentage {
                         BatteryRow(
                             icon: "archivebox",
@@ -46,9 +46,18 @@ struct BatteryView: View {
                             isCharging: bluetoothManager.earbuds.batteryState.isCaseCharging
                         )
                         .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else if bluetoothManager.earbuds.batteryState.isCaseCharging {
+                        BatteryRow(
+                            icon: "archivebox",
+                            label: "Case",
+                            percentage: nil,
+                            isCharging: true,
+                            emptyText: "Charging"
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
-                .animation(.easeInOut(duration: 0.25), value: bluetoothManager.earbuds.batteryState.casePercentage)
+                .animation(.easeInOut(duration: 0.25), value: bluetoothManager.earbuds.batteryState.casePercentage != nil || bluetoothManager.earbuds.batteryState.isCaseCharging)
             } else {
                 Text("Earbuds are disconnected")
                     .foregroundColor(.secondary)
@@ -126,10 +135,21 @@ struct BatteryRow: View {
                 }
                 .frame(width: 50, alignment: .trailing)
             } else {
-                Text(emptyText)
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    if isCharging {
+                        Image(systemName: "bolt.fill")
+                            .font(.caption2)
+                            .foregroundColor(.yellow)
+                        Text("Charging")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text(emptyText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
     }

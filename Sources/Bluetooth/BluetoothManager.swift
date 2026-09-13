@@ -1,6 +1,7 @@
 import Foundation
 import IOBluetooth
 import Combine
+import AppKit
 
 public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChannelDelegate {
     @Published public var earbuds: Earbuds
@@ -251,7 +252,7 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
             
             if frame.command == NothingEarProtocol.Command.respBattery || frame.command == NothingEarProtocol.Command.pushBattery {
                 if let newBattery = NothingEarProtocol.parseBatteryPayload(frame.payload) {
-                    log("[NothingEar] Battery parsed: L=\(String(describing: newBattery.leftPercentage))% R=\(String(describing: newBattery.rightPercentage))% Case=\(String(describing: newBattery.casePercentage))%")
+                    log("[NothingEar] Battery parsed: L=\(String(describing: newBattery.leftPercentage))%(chg=\(newBattery.isLeftCharging)) R=\(String(describing: newBattery.rightPercentage))%(chg=\(newBattery.isRightCharging)) Case=\(String(describing: newBattery.casePercentage))%(chg=\(newBattery.isCaseCharging))")
                     DispatchQueue.main.async {
                         var updated = self.earbuds.batteryState
                         
@@ -328,5 +329,134 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
         } else {
             try? line.write(to: logURL, atomically: true, encoding: .utf8)
         }
+    }
+}
+
+// MARK: - Menu Bar Image Generation
+extension BluetoothManager {
+    public var menuBarImage: NSImage {
+        guard earbuds.connectionState == .connected else {
+            let fallback = NSImage(systemSymbolName: "earbuds", accessibilityDescription: "Nothing Ear") ?? NSImage()
+            fallback.isTemplate = true
+            return fallback
+        }
+        return generateMenuBarImage(state: earbuds.batteryState)
+    }
+    
+    private func generateMenuBarImage(state: BatteryState) -> NSImage {
+        let leftPct = state.leftPercentage
+        let isLeftCharging = state.isLeftCharging
+        let rightPct = state.rightPercentage
+        let isRightCharging = state.isRightCharging
+        let casePct = state.casePercentage
+        let isCaseCharging = state.isCaseCharging
+        
+        if leftPct == nil && rightPct == nil && casePct == nil && !isLeftCharging && !isRightCharging && !isCaseCharging {
+            let fallback = NSImage(systemSymbolName: "earbuds", accessibilityDescription: "Nothing Ear") ?? NSImage()
+            fallback.isTemplate = true
+            return fallback
+        }
+        
+        let fontConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        let boltConfig = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
+        
+        func batterySymbol(for p: Int) -> String {
+            switch p {
+            case 90...100: return "battery.100"
+            case 65..<90: return "battery.75"
+            case 35..<65: return "battery.50"
+            case 10..<35: return "battery.25"
+            default: return "battery.0"
+            }
+        }
+        
+        struct DrawItem {
+            let image: NSImage
+            let opacity: CGFloat
+        }
+        
+        var groups: [[DrawItem]] = []
+        
+        // Group 1: Left earbud
+        var leftGroup: [DrawItem] = []
+        if let img = NSImage(systemSymbolName: "earbud.left", accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+            leftGroup.append(DrawItem(image: img, opacity: leftPct != nil ? 1.0 : 0.35))
+        }
+        if isLeftCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
+            leftGroup.append(DrawItem(image: bolt, opacity: 1.0))
+        }
+        if let l = leftPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: l), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+            leftGroup.append(DrawItem(image: bImg, opacity: 1.0))
+        }
+        groups.append(leftGroup)
+        
+        // Group 2: Right earbud
+        var rightGroup: [DrawItem] = []
+        if let img = NSImage(systemSymbolName: "earbud.right", accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+            rightGroup.append(DrawItem(image: img, opacity: rightPct != nil ? 1.0 : 0.35))
+        }
+        if isRightCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
+            rightGroup.append(DrawItem(image: bolt, opacity: 1.0))
+        }
+        if let r = rightPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: r), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+            rightGroup.append(DrawItem(image: bImg, opacity: 1.0))
+        }
+        groups.append(rightGroup)
+        
+        // Group 3: Case (shown if open or charging)
+        if casePct != nil || isCaseCharging {
+            var caseGroup: [DrawItem] = []
+            if let caseImg = NSImage(systemSymbolName: "archivebox", accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+                caseGroup.append(DrawItem(image: caseImg, opacity: 1.0))
+            }
+            if isCaseCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
+                caseGroup.append(DrawItem(image: bolt, opacity: 1.0))
+            }
+            if let c = casePct, let bImg = NSImage(systemSymbolName: batterySymbol(for: c), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+                caseGroup.append(DrawItem(image: bImg, opacity: 1.0))
+            }
+            groups.append(caseGroup)
+        }
+        
+        let innerSpacing: CGFloat = 2.0
+        let groupSpacing: CGFloat = 6.0
+        
+        var totalWidth: CGFloat = 0
+        var maxHeight: CGFloat = 16.0
+        
+        for (gIdx, group) in groups.enumerated() {
+            for (iIdx, item) in group.enumerated() {
+                totalWidth += item.image.size.width
+                maxHeight = max(maxHeight, item.image.size.height)
+                if iIdx < group.count - 1 {
+                    totalWidth += innerSpacing
+                }
+            }
+            if gIdx < groups.count - 1 {
+                totalWidth += groupSpacing
+            }
+        }
+        
+        let finalSize = NSSize(width: max(16.0, ceil(totalWidth)), height: ceil(maxHeight))
+        let result = NSImage(size: finalSize, flipped: false) { rect in
+            var currentX: CGFloat = 0
+            for (gIdx, group) in groups.enumerated() {
+                for (iIdx, item) in group.enumerated() {
+                    let y = (rect.height - item.image.size.height) / 2.0
+                    let targetRect = NSRect(x: currentX, y: y, width: item.image.size.width, height: item.image.size.height)
+                    item.image.draw(in: targetRect, from: .zero, operation: .sourceOver, fraction: item.opacity)
+                    currentX += item.image.size.width
+                    if iIdx < group.count - 1 {
+                        currentX += innerSpacing
+                    }
+                }
+                if gIdx < groups.count - 1 {
+                    currentX += groupSpacing
+                }
+            }
+            return true
+        }
+        result.isTemplate = true
+        return result
     }
 }
