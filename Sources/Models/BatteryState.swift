@@ -9,6 +9,10 @@ public struct BatteryState: Equatable {
     public var isRightCharging: Bool = false
     public var isCaseCharging: Bool = false
     
+    public var isCaseOpen: Bool {
+        return casePercentage != nil
+    }
+    
     public init(leftPercentage: Int? = nil, rightPercentage: Int? = nil, casePercentage: Int? = nil) {
         self.leftPercentage = leftPercentage
         self.rightPercentage = rightPercentage

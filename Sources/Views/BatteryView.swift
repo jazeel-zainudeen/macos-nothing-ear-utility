@@ -24,10 +24,31 @@ struct BatteryView: View {
             
             if bluetoothManager.earbuds.connectionState == .connected {
                 VStack(spacing: 8) {
-                    BatteryRow(icon: "earbuds", label: "Left", percentage: bluetoothManager.earbuds.batteryState.leftPercentage)
-                    BatteryRow(icon: "earbuds", label: "Right", percentage: bluetoothManager.earbuds.batteryState.rightPercentage)
-                    BatteryRow(icon: "archivebox", label: "Case", percentage: bluetoothManager.earbuds.batteryState.casePercentage)
+                    BatteryRow(
+                        icon: "earbuds",
+                        label: "Left",
+                        percentage: bluetoothManager.earbuds.batteryState.leftPercentage,
+                        isCharging: bluetoothManager.earbuds.batteryState.isLeftCharging
+                    )
+                    BatteryRow(
+                        icon: "earbuds",
+                        label: "Right",
+                        percentage: bluetoothManager.earbuds.batteryState.rightPercentage,
+                        isCharging: bluetoothManager.earbuds.batteryState.isRightCharging
+                    )
+                    
+                    // Show Case battery only when the box is opened
+                    if let casePct = bluetoothManager.earbuds.batteryState.casePercentage {
+                        BatteryRow(
+                            icon: "archivebox",
+                            label: "Case",
+                            percentage: casePct,
+                            isCharging: bluetoothManager.earbuds.batteryState.isCaseCharging
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
+                .animation(.easeInOut(duration: 0.25), value: bluetoothManager.earbuds.batteryState.casePercentage)
             } else {
                 Text("Earbuds are disconnected")
                     .foregroundColor(.secondary)
@@ -38,16 +59,35 @@ struct BatteryView: View {
             Divider()
             
             HStack {
-                Text("Last updated: Just now")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if let lastSeen = bluetoothManager.earbuds.lastSeen {
+                    Text("Last updated: \(lastSeen.formatted(date: .omitted, time: .standard))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Last updated: ---")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
                 Spacer()
+                
+                Button(action: {
+                    bluetoothManager.sendBatteryQuery()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Refresh battery status")
+                
                 Button(action: {
                     openWindow(id: "settings-window")
                 }) {
                     Image(systemName: "gearshape")
+                        .font(.caption)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .help("Settings")
             }
         }
         .padding()
@@ -59,22 +99,35 @@ struct BatteryRow: View {
     var icon: String
     var label: String
     var percentage: Int?
+    var isCharging: Bool = false
+    var emptyText: String = "In Case"
     
     var body: some View {
         HStack {
             Image(systemName: icon)
                 .frame(width: 24, alignment: .center)
+                .foregroundColor(percentage != nil ? .primary : .secondary)
             Text(label)
                 .frame(width: 50, alignment: .leading)
+                .foregroundColor(percentage != nil ? .primary : .secondary)
             
             if let pct = percentage {
                 ProgressView(value: Double(pct), total: 100)
                     .progressViewStyle(LinearProgressViewStyle(tint: colorForPercentage(pct)))
-                Text("\(pct)%")
-                    .frame(width: 40, alignment: .trailing)
-                    .font(.subheadline.monospacedDigit())
+                
+                HStack(spacing: 2) {
+                    if isCharging {
+                        Image(systemName: "bolt.fill")
+                            .font(.caption2)
+                            .foregroundColor(.yellow)
+                    }
+                    Text("\(pct)%")
+                        .font(.subheadline.monospacedDigit())
+                }
+                .frame(width: 50, alignment: .trailing)
             } else {
-                Text("---")
+                Text(emptyText)
+                    .font(.caption)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .foregroundColor(.secondary)
             }
