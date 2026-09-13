@@ -10,6 +10,10 @@ public class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDeleg
     private var centralManager: CBCentralManager!
     private var blePeripheral: CBPeripheral?
     private var pollTimer: Timer?
+    private var connectNotification: IOBluetoothUserNotification?
+    private var disconnectNotification: IOBluetoothUserNotification?
+    private var trackedDeviceAddress: String?
+    private var connectionTrackedByNotification = false
     
     // Known Nothing device name patterns
     private let nothingNamePatterns = ["Nothing Ear", "Ear (1)", "Ear (2)", "Ear (a)", "Ear (stick)", "Nothing"]
@@ -18,7 +22,10 @@ public class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDeleg
         self.earbuds = Earbuds(name: "Nothing Ear", connectionState: .disconnected)
         super.init()
         
-        // Also start CoreBluetooth for BLE advertisement data (battery via Fast Pair)
+        // Register for global Bluetooth connect/disconnect notifications
+        connectNotification = IOBluetoothDevice.register(forConnectNotifications: self, selector: #selector(deviceConnected(_:device:)))
+        
+        // Start CoreBluetooth for BLE advertisement data (battery via Fast Pair)
         self.centralManager = CBCentralManager(delegate: self, queue: .main)
         
         // Defer initial scan to let SwiftUI set up observation
@@ -26,14 +33,50 @@ public class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDeleg
             self?.findPairedNothingDevice()
         }
         
-        // Poll for paired device status periodically
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // Poll for paired device status periodically as a fallback
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             self?.findPairedNothingDevice()
         }
     }
     
     deinit {
         pollTimer?.invalidate()
+        connectNotification?.unregister()
+        disconnectNotification?.unregister()
+    }
+    
+    // MARK: - IOBluetooth Notifications
+    
+    @objc private func deviceConnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        let name = device.name ?? ""
+        print("[NothingEar] Device connected notification: '\(name)'")
+        
+        if isNothingDevice(name: name) {
+            // Register for disconnect notification on this specific device
+            disconnectNotification?.unregister()
+            disconnectNotification = device.register(forDisconnectNotification: self, selector: #selector(deviceDisconnected(_:device:)))
+            trackedDeviceAddress = device.addressString
+            connectionTrackedByNotification = true
+            
+            DispatchQueue.main.async {
+                self.earbuds.name = name
+                self.earbuds.connectionState = .connected
+                self.earbuds.lastSeen = Date()
+                self.updateDiagnostics(device: device)
+            }
+        }
+    }
+    
+    @objc private func deviceDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        let name = device.name ?? ""
+        print("[NothingEar] Device disconnected notification: '\(name)'")
+        
+        if isNothingDevice(name: name) {
+            connectionTrackedByNotification = false
+            DispatchQueue.main.async {
+                self.earbuds.connectionState = .disconnected
+            }
+        }
     }
     
     // MARK: - IOBluetooth (Classic Bluetooth - finds paired devices)
@@ -44,29 +87,25 @@ public class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDeleg
             return
         }
         
-        print("[NothingEar] Found \(pairedDevices.count) paired devices:")
-        for device in pairedDevices {
-            let name = device.name ?? "(no name)"
-            let connected = device.isConnected()
-            print("[NothingEar]   - '\(name)' connected=\(connected)")
-        }
+        print("[NothingEar] Found \(pairedDevices.count) paired devices")
         
         for device in pairedDevices {
             let name = device.name ?? ""
             if isNothingDevice(name: name) {
-                print("[NothingEar] Matched Nothing device: '\(name)'")
+                let address = device.addressString ?? ""
+                print("[NothingEar] Found '\(name)' address=\(address) notificationTracked=\(connectionTrackedByNotification)")
+                
+                // If notifications are already tracking connection, just update the name
+                if connectionTrackedByNotification {
+                    DispatchQueue.main.async {
+                        self.earbuds.name = name
+                    }
+                    return
+                }
+                
+                // Otherwise, set the name and keep state as-is (don't override to disconnected)
                 DispatchQueue.main.async {
                     self.earbuds.name = name
-                    
-                    if device.isConnected() {
-                        self.earbuds.connectionState = .connected
-                        self.earbuds.lastSeen = Date()
-                        
-                        // Add device info to diagnostics
-                        self.updateDiagnostics(device: device)
-                    } else {
-                        self.earbuds.connectionState = .disconnected
-                    }
                 }
                 return
             }
