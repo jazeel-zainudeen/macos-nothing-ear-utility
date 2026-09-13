@@ -26,6 +26,7 @@
 		8A954D64431E0B5CFDDBE441 /* NothingEarUtilityApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NothingEarUtilityApp.swift; sourceTree = "<group>"; };
 		9B0B993E46599F2368B1B13E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B6A607DB383F9C05B367F8E7 /* NothingEarProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NothingEarProtocol.swift; sourceTree = "<group>"; };
+		BD7F2C8E723F56F9B917D146 /* NothingEarUtility.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NothingEarUtility.entitlements; sourceTree = "<group>"; };
 		BE45E1A98B81CDE4B469B3B5 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		D821088E8697AE9E75A8F830 /* Earbuds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Earbuds.swift; sourceTree = "<group>"; };
 		F3F80B5C0ED69B142BECE3C1 /* BluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
@@ -80,6 +81,7 @@
 		D2E07DA75FBF406B59301590 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				BD7F2C8E723F56F9B917D146 /* NothingEarUtility.entitlements */,
 				EE1B476E0815E6F8BC93E442 /* App */,
 				ADBD98F63CE8FE596B03AC85 /* Bluetooth */,
 				1A400E679206037BA280A695 /* Models */,
@@ -236,6 +238,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/NothingEarUtility.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = "";
@@ -313,6 +316,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/NothingEarUtility.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = "";
