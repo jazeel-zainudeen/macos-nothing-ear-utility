@@ -80,27 +80,70 @@ struct BatteryView: View {
                 
                 Spacer()
                 
-                Button(action: {
+                MenuIconButton(
+                    icon: "arrow.clockwise",
+                    tooltip: "Refresh battery status"
+                ) {
                     bluetoothManager.sendBatteryQuery()
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .help("Refresh battery status")
                 
-                Button(action: {
+                MenuIconButton(
+                    icon: "gearshape",
+                    tooltip: "Settings"
+                ) {
                     openWindow(id: "settings-window")
-                }) {
-                    Image(systemName: "gearshape")
-                        .font(.caption)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .help("Settings")
+                
+                MenuIconButton(
+                    icon: "power",
+                    tooltip: "Quit Nothing Ear Utility",
+                    isDestructive: true
+                ) {
+                    NSApplication.shared.terminate(nil)
+                }
             }
         }
         .padding()
         .frame(width: 280)
+    }
+}
+
+struct MenuIconButton: View {
+    let icon: String
+    let tooltip: String
+    var isDestructive: Bool = false
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(isDestructive ? (isHovered ? .red : .secondary) : (isHovered ? .primary : .secondary))
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isHovered ? (isDestructive ? Color.red.opacity(0.15) : Color.primary.opacity(0.1)) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(isHovered ? (isDestructive ? Color.red.opacity(0.25) : Color.primary.opacity(0.15)) : Color.clear, lineWidth: 0.5)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(tooltip)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 

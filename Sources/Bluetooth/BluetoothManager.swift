@@ -6,9 +6,15 @@ import AppKit
 public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChannelDelegate {
     @Published public var earbuds: Earbuds
     @Published public var discoveredServices: [String] = []
+    @Published public var isHovered: Bool = false
     
     private var pollTimer: Timer?
     private var batteryQueryTimer: Timer?
+    private var hoverTimer: Timer?
+    private weak var statusButton: NSStatusBarButton?
+    private var lastValidFrame: NSRect = .zero
+    private var hoverEnterCount: Int = 0
+    private var hoverExitCount: Int = 0
     private var connectNotification: IOBluetoothUserNotification?
     private var disconnectNotification: IOBluetoothUserNotification?
     
@@ -26,6 +32,8 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
         
         log("[NothingEar] Initializing BluetoothManager...")
         
+        startHoverMonitoring()
+        
         // Register for global Bluetooth connect notifications
         connectNotification = IOBluetoothDevice.register(forConnectNotifications: self, selector: #selector(deviceConnected(_:device:)))
         
@@ -41,6 +49,7 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
     }
     
     deinit {
+        hoverTimer?.invalidate()
         pollTimer?.invalidate()
         batteryQueryTimer?.invalidate()
         connectNotification?.unregister()
@@ -112,6 +121,7 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
             self.earbuds.connectionState = .connected
             self.earbuds.lastSeen = Date()
             self.updateDiagnostics(device: device)
+            self.updateStatusButtonImage()
         }
         
         // Open RFCOMM channel with slight delay to ensure Bluetooth link is stabilized
@@ -137,6 +147,7 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
         DispatchQueue.main.async {
             self.earbuds.connectionState = .disconnected
             self.earbuds.batteryState = BatteryState()
+            self.updateStatusButtonImage()
         }
     }
     
@@ -276,6 +287,7 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
                         self.earbuds.batteryState = updated
                         self.earbuds.connectionState = .connected
                         self.earbuds.lastSeen = Date()
+                        self.updateStatusButtonImage()
                     }
                 }
             }
@@ -334,16 +346,16 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
 
 // MARK: - Menu Bar Image Generation
 extension BluetoothManager {
-    public var menuBarImage: NSImage {
+    public func menuBarImage(showBattery: Bool = false) -> NSImage {
         guard earbuds.connectionState == .connected else {
             let fallback = NSImage(systemSymbolName: "earbuds", accessibilityDescription: "Nothing Ear") ?? NSImage()
             fallback.isTemplate = true
             return fallback
         }
-        return generateMenuBarImage(state: earbuds.batteryState)
+        return generateMenuBarImage(state: earbuds.batteryState, showBattery: showBattery)
     }
     
-    private func generateMenuBarImage(state: BatteryState) -> NSImage {
+    private func generateMenuBarImage(state: BatteryState, showBattery: Bool) -> NSImage {
         let leftPct = state.leftPercentage
         let isLeftCharging = state.isLeftCharging
         let rightPct = state.rightPercentage
@@ -385,7 +397,7 @@ extension BluetoothManager {
         if isLeftCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
             leftGroup.append(DrawItem(image: bolt, opacity: 1.0))
         }
-        if let l = leftPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: l), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+        if showBattery, let l = leftPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: l), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
             leftGroup.append(DrawItem(image: bImg, opacity: 1.0))
         }
         groups.append(leftGroup)
@@ -398,7 +410,7 @@ extension BluetoothManager {
         if isRightCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
             rightGroup.append(DrawItem(image: bolt, opacity: 1.0))
         }
-        if let r = rightPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: r), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+        if showBattery, let r = rightPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: r), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
             rightGroup.append(DrawItem(image: bImg, opacity: 1.0))
         }
         groups.append(rightGroup)
@@ -412,14 +424,26 @@ extension BluetoothManager {
             if isCaseCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
                 caseGroup.append(DrawItem(image: bolt, opacity: 1.0))
             }
-            if let c = casePct, let bImg = NSImage(systemSymbolName: batterySymbol(for: c), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
+            if showBattery, let c = casePct, let bImg = NSImage(systemSymbolName: batterySymbol(for: c), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
                 caseGroup.append(DrawItem(image: bImg, opacity: 1.0))
             }
             groups.append(caseGroup)
         }
         
-        let innerSpacing: CGFloat = 2.0
-        let groupSpacing: CGFloat = 6.0
+        let innerSpacing: CGFloat = 1.0
+        func spacingAfterGroup(_ gIdx: Int) -> CGFloat {
+            if showBattery {
+                return 4.0
+            } else {
+                // When battery is not shown:
+                // Keep the left and right earbuds tightly together (1.0pt) so they appear as a paired unit
+                if gIdx == 0 {
+                    return 1.0
+                } else {
+                    return 4.0 // Spacing before the case icon
+                }
+            }
+        }
         
         var totalWidth: CGFloat = 0
         var maxHeight: CGFloat = 16.0
@@ -433,7 +457,7 @@ extension BluetoothManager {
                 }
             }
             if gIdx < groups.count - 1 {
-                totalWidth += groupSpacing
+                totalWidth += spacingAfterGroup(gIdx)
             }
         }
         
@@ -451,7 +475,7 @@ extension BluetoothManager {
                     }
                 }
                 if gIdx < groups.count - 1 {
-                    currentX += groupSpacing
+                    currentX += spacingAfterGroup(gIdx)
                 }
             }
             return true
@@ -460,3 +484,94 @@ extension BluetoothManager {
         return result
     }
 }
+
+// MARK: - Menu Bar Hover & Status Item
+extension BluetoothManager {
+    public func startHoverMonitoring() {
+        guard hoverTimer == nil else { return }
+        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
+            self?.checkMenuBarHover()
+        }
+        if let hoverTimer = hoverTimer {
+            RunLoop.main.add(hoverTimer, forMode: .common)
+        }
+    }
+    
+    private func findStatusButton() -> NSStatusBarButton? {
+        for w in NSApp.windows {
+            if NSStringFromClass(type(of: w)).contains("NSStatusBarWindow") {
+                func search(in view: NSView) -> NSStatusBarButton? {
+                    if let btn = view as? NSStatusBarButton { return btn }
+                    for sub in view.subviews {
+                        if let btn = search(in: sub) { return btn }
+                    }
+                    return nil
+                }
+                if let cv = w.contentView, let btn = search(in: cv) {
+                    return btn
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func checkMenuBarHover() {
+        if statusButton == nil {
+            statusButton = findStatusButton()
+            statusButton?.toolTip = "Nothing Ear (Click to open menu)"
+        }
+        guard let btn = statusButton, let window = btn.window else { return }
+        
+        // Track the last valid screen frame (origin.y > 100).
+        // During NSStatusBarButton image resizing, window.frame is momentarily at (0, -34),
+        // so we must never overwrite lastValidFrame with an offscreen layout-pass frame.
+        let frame = window.frame
+        if frame.origin.y > 100 && frame.width > 0 {
+            lastValidFrame = frame
+        }
+        guard lastValidFrame.origin.y > 100 else { return }
+        
+        let mouseLoc = NSEvent.mouseLocation
+        let detectionRect = isHovered ? lastValidFrame.insetBy(dx: -4, dy: -4) : lastValidFrame
+        let isInside = detectionRect.contains(mouseLoc)
+        
+        if isInside {
+            hoverExitCount = 0
+            if !isHovered {
+                hoverEnterCount += 1
+                // Require ~180ms (6 ticks of 30ms) of deliberate hover before revealing
+                if hoverEnterCount >= 6 {
+                    isHovered = true
+                    hoverEnterCount = 0
+                    let updated = self.menuBarImage(showBattery: true)
+                    btn.image = updated
+                }
+            }
+        } else {
+            hoverEnterCount = 0
+            if isHovered {
+                hoverExitCount += 1
+                // Require ~180ms of cursor absence before collapsing to prevent accidental collapse
+                if hoverExitCount >= 6 {
+                    isHovered = false
+                    hoverExitCount = 0
+                    let updated = self.menuBarImage(showBattery: false)
+                    btn.image = updated
+                }
+            }
+        }
+    }
+    
+    public func updateStatusButtonImage() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.statusButton == nil {
+                self.statusButton = self.findStatusButton()
+            }
+            if let btn = self.statusButton {
+                btn.image = self.menuBarImage(showBattery: self.isHovered)
+            }
+        }
+    }
+}
+

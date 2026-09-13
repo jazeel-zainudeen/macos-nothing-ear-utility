@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @main
 struct NothingEarUtilityApp: App {
@@ -24,6 +25,6 @@ struct MenuBarIconView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     
     var body: some View {
-        Image(nsImage: bluetoothManager.menuBarImage)
+        Image(nsImage: bluetoothManager.menuBarImage(showBattery: bluetoothManager.isHovered))
     }
 }
