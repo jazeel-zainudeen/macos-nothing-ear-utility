@@ -68,21 +68,43 @@ struct BatteryView: View {
             Divider()
             
             HStack {
-                if let lastSeen = bluetoothManager.earbuds.lastSeen {
+                if bluetoothManager.isRefreshing {
+                    HStack(spacing: 5) {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text("Refreshing...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .transition(.opacity)
+                } else if bluetoothManager.justRefreshed {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption2)
+                        Text("Updated just now")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .transition(.opacity)
+                } else if let lastSeen = bluetoothManager.earbuds.lastSeen {
                     Text("Last updated: \(lastSeen.formatted(date: .omitted, time: .standard))")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .transition(.opacity)
                 } else {
                     Text("Last updated: ---")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .transition(.opacity)
                 }
                 
                 Spacer()
                 
                 MenuIconButton(
                     icon: "arrow.clockwise",
-                    tooltip: "Refresh battery status"
+                    tooltip: "Refresh battery status",
+                    isLoading: bluetoothManager.isRefreshing
                 ) {
                     bluetoothManager.sendBatteryQuery()
                 }
@@ -102,6 +124,8 @@ struct BatteryView: View {
                     NSApplication.shared.terminate(nil)
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: bluetoothManager.isRefreshing)
+            .animation(.easeInOut(duration: 0.2), value: bluetoothManager.justRefreshed)
         }
         .padding()
         .frame(width: 280)
@@ -112,15 +136,23 @@ struct MenuIconButton: View {
     let icon: String
     let tooltip: String
     var isDestructive: Bool = false
+    var isLoading: Bool = false
     let action: () -> Void
     
     @State private var isHovered = false
+    @State private var spinAngle: Double = 0
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.6)) {
+                spinAngle += 360
+            }
+            action()
+        }) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(isDestructive ? (isHovered ? .red : .secondary) : (isHovered ? .primary : .secondary))
+                .rotationEffect(.degrees(spinAngle))
                 .frame(width: 26, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -142,6 +174,13 @@ struct MenuIconButton: View {
                 NSCursor.pointingHand.push()
             } else {
                 NSCursor.pop()
+            }
+        }
+        .onChange(of: isLoading) { loading in
+            if loading {
+                withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
+                    spinAngle += 360
+                }
             }
         }
     }

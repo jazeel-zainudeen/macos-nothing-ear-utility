@@ -7,6 +7,8 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
     @Published public var earbuds: Earbuds
     @Published public var discoveredServices: [String] = []
     @Published public var isHovered: Bool = false
+    @Published public var isRefreshing: Bool = false
+    @Published public var justRefreshed: Bool = false
     
     private var pollTimer: Timer?
     private var batteryQueryTimer: Timer?
@@ -211,14 +213,32 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
     }
     
     public func sendBatteryQuery() {
+        DispatchQueue.main.async {
+            self.isRefreshing = true
+        }
+        
         guard let channel = rfcommChannel, channel.isOpen() else {
             log("[NothingEar] Cannot send battery query: channel not open")
+            if let dev = currentDevice {
+                openSPPChannel(for: dev)
+            } else {
+                findAndConnectPairedDevice()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.isRefreshing = false
+            }
             return
         }
         
         var frame = NothingEarProtocol.createReadBatteryFrame()
         let res = channel.writeSync(&frame, length: UInt16(frame.count))
         log("[NothingEar] Battery query sent (writeSync result: \(res))")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            if self?.isRefreshing == true {
+                self?.isRefreshing = false
+            }
+        }
     }
     
     // MARK: - IOBluetoothRFCOMMChannelDelegate
@@ -287,6 +307,11 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
                         self.earbuds.batteryState = updated
                         self.earbuds.connectionState = .connected
                         self.earbuds.lastSeen = Date()
+                        self.isRefreshing = false
+                        self.justRefreshed = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                            self?.justRefreshed = false
+                        }
                         self.updateStatusButtonImage()
                     }
                 }
