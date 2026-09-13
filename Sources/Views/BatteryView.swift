@@ -176,13 +176,6 @@ struct MenuIconButton: View {
                 NSCursor.pop()
             }
         }
-        .onChange(of: isLoading) { loading in
-            if loading {
-                withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
-                    spinAngle += 360
-                }
-            }
-        }
     }
 }
 

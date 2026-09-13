@@ -282,18 +282,15 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
             log("[NothingEar] Received frame cmd=0x\(String(frame.command, radix: 16)) payloadLen=\(frame.payload.count)")
             
             if frame.command == NothingEarProtocol.Command.respBattery || frame.command == NothingEarProtocol.Command.pushBattery {
+                let hexStr = frame.payload.map { String(format: "%02X", $0) }.joined(separator: " ")
+                log("[NothingEar] Raw battery payload: [\(hexStr)]")
                 if let newBattery = NothingEarProtocol.parseBatteryPayload(frame.payload) {
                     log("[NothingEar] Battery parsed: L=\(String(describing: newBattery.leftPercentage))%(chg=\(newBattery.isLeftCharging)) R=\(String(describing: newBattery.rightPercentage))%(chg=\(newBattery.isRightCharging)) Case=\(String(describing: newBattery.casePercentage))%(chg=\(newBattery.isCaseCharging))")
                     DispatchQueue.main.async {
                         var updated = self.earbuds.batteryState
                         
-                        // When an earbud is kept inside the closed case, it powers down its link
-                        // and the device omits it from the battery packet. Update directly so nil is reflected.
                         updated.leftPercentage = newBattery.leftPercentage
-                        updated.isLeftCharging = newBattery.isLeftCharging
-                        
                         updated.rightPercentage = newBattery.rightPercentage
-                        updated.isRightCharging = newBattery.isRightCharging
                         
                         // When box is open, casePercentage is present.
                         // When box is closed, casePercentage is nil.
@@ -302,6 +299,26 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
                         updated.isCaseCharging = newBattery.isCaseCharging
                         if updated.isCaseOpen != wasOpen {
                             self.log("[NothingEar] Case lid state changed: \(updated.isCaseOpen ? "OPENED" : "CLOSED")")
+                        }
+                        
+                        // Bud charging detection:
+                        // Earbuds charge whenever they are seated inside the case.
+                        // 1) Explicit hardware charging flag (raw & 0x80 != 0)
+                        // 2) Bud is inside the case (omitted/nil while connected to case or other bud)
+                        if newBattery.isLeftCharging {
+                            updated.isLeftCharging = true
+                        } else if newBattery.leftPercentage == nil && (newBattery.rightPercentage != nil || newBattery.casePercentage != nil) {
+                            updated.isLeftCharging = true
+                        } else {
+                            updated.isLeftCharging = false
+                        }
+                        
+                        if newBattery.isRightCharging {
+                            updated.isRightCharging = true
+                        } else if newBattery.rightPercentage == nil && (newBattery.leftPercentage != nil || newBattery.casePercentage != nil) {
+                            updated.isRightCharging = true
+                        } else {
+                            updated.isRightCharging = false
                         }
                         
                         self.earbuds.batteryState = updated
