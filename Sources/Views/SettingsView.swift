@@ -264,6 +264,20 @@ struct GeneralSettingsView: View {
     
     var body: some View {
         Form {
+            Section(header: Text("Earbuds Appearance")) {
+                Picker("Edition Color", selection: Binding(
+                    get: { NothingEarAssets.currentColor },
+                    set: { newColor in
+                        NothingEarAssets.currentColor = newColor
+                        bluetoothManager.objectWillChange.send()
+                    }
+                )) {
+                    Text("Black").tag(EarbudColor.black)
+                    Text("White").tag(EarbudColor.white)
+                }
+                .pickerStyle(.segmented)
+            }
+            
             Section(header: Text("Startup")) {
                 Toggle("Launch at Login", isOn: $launchAtLogin)
             }
