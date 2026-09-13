@@ -10,8 +10,10 @@ struct NothingEarUtilityApp: App {
         }
         .menuBarExtraStyle(.window)
         
-        Settings {
+        Window("Settings", id: "settings-window") {
             SettingsView(bluetoothManager: bluetoothManager)
         }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 450, height: 300)
     }
 }

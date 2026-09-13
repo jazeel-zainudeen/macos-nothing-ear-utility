@@ -239,6 +239,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nothing Ear Utility needs Bluetooth access to connect to your Nothing Ear (2) and monitor battery levels.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -315,6 +316,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nothing Ear Utility needs Bluetooth access to connect to your Nothing Ear (2) and monitor battery levels.";
 				LD_RUNPATH_SEARCH_PATHS = (

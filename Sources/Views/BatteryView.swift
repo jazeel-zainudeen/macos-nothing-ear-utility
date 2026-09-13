@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BatteryView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
+    @Environment(\.openWindow) private var openWindow
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -42,7 +43,7 @@ struct BatteryView: View {
                     .foregroundColor(.secondary)
                 Spacer()
                 Button(action: {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    openWindow(id: "settings-window")
                 }) {
                     Image(systemName: "gearshape")
                 }
