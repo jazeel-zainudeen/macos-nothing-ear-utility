@@ -25,13 +25,13 @@ struct BatteryView: View {
             if bluetoothManager.earbuds.connectionState == .connected {
                 VStack(spacing: 8) {
                     BatteryRow(
-                        icon: "earbuds",
+                        icon: "earbud.left",
                         label: "Left",
                         percentage: bluetoothManager.earbuds.batteryState.leftPercentage,
                         isCharging: bluetoothManager.earbuds.batteryState.isLeftCharging
                     )
                     BatteryRow(
-                        icon: "earbuds",
+                        icon: "earbud.right",
                         label: "Right",
                         percentage: bluetoothManager.earbuds.batteryState.rightPercentage,
                         isCharging: bluetoothManager.earbuds.batteryState.isRightCharging
