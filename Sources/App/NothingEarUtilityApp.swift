@@ -1,11 +1,11 @@
 import SwiftUI
 
 @main
-struct NothingBatteryApp: App {
+struct NothingEarUtilityApp: App {
     @StateObject private var bluetoothManager = BluetoothManager()
     
     var body: some Scene {
-        MenuBarExtra("NothingBattery", systemImage: "earbuds") {
+        MenuBarExtra("Nothing Ear Utility", systemImage: "earbuds") {
             BatteryView(bluetoothManager: bluetoothManager)
         }
         .menuBarExtraStyle(.window)

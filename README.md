@@ -1,4 +1,4 @@
-# Nothing Battery (macOS)
+# macos-nothing-ear-utility
 
 A polished, native macOS menu-bar utility to monitor the battery and connection status of your **Nothing Ear (2)** Bluetooth earbuds. 
 
@@ -6,7 +6,7 @@ A polished, native macOS menu-bar utility to monitor the battery and connection 
 ![Swift](https://img.shields.io/badge/Swift-5.0-orange)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-Nothing Ear (2) does not natively report separate left, right, and case batteries to macOS via the standard Bluetooth menu. `NothingBattery` solves this by continuously monitoring Google Fast Pair Bluetooth Low Energy (BLE) payloads to extract detailed battery information.
+Nothing Ear (2) does not natively report separate left, right, and case batteries to macOS via the standard Bluetooth menu. `Nothing Ear Utility` solves this by continuously monitoring Google Fast Pair Bluetooth Low Energy (BLE) payloads to extract detailed battery information.
 
 ## Features
 
@@ -44,12 +44,12 @@ Since this project uses XcodeGen, the structure is managed via `project.yml`.
    xcodegen
    ```
 
-3. Open `NothingBattery.xcodeproj` in Xcode.
-4. Select your Mac as the destination and run the `NothingBattery` scheme (`Cmd + R`).
+3. Open `macos-nothing-ear-utility.xcodeproj` in Xcode.
+4. Select your Mac as the destination and run the `NothingEarUtility` scheme (`Cmd + R`).
 
 ## How Battery Parsing Works
 
-When connected, Nothing Ear (2) broadcasts a Google Fast Pair BLE packet containing the battery states. `NothingBattery` uses `CBCentralManager` to capture the `CBAdvertisementDataServiceDataKey` from the `FE2C` service. The payload is parsed in `NothingEarProtocol.swift` to extract the individual charging states and percentages.
+When connected, Nothing Ear (2) broadcasts a Google Fast Pair BLE packet containing the battery states. `Nothing Ear Utility` uses `CBCentralManager` to capture the `CBAdvertisementDataServiceDataKey` from the `FE2C` service. The payload is parsed in `NothingEarProtocol.swift` to extract the individual charging states and percentages.
 
 ## Privacy & Permissions
 
