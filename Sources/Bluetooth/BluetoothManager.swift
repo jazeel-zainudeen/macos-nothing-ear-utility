@@ -388,16 +388,34 @@ public class BluetoothManager: NSObject, ObservableObject, IOBluetoothRFCOMMChan
 
 // MARK: - Menu Bar Image Generation
 extension BluetoothManager {
-    public func menuBarImage(showBattery: Bool = false) -> NSImage {
+    public var menuBarImage: NSImage {
         guard earbuds.connectionState == .connected else {
             let fallback = NSImage(systemSymbolName: "earbuds", accessibilityDescription: "Nothing Ear") ?? NSImage()
             fallback.isTemplate = true
             return fallback
         }
-        return generateMenuBarImage(state: earbuds.batteryState, showBattery: showBattery)
+        return generateMenuBarImage(state: earbuds.batteryState)
     }
     
-    private func generateMenuBarImage(state: BatteryState, showBattery: Bool) -> NSImage {
+    public func menuBarImage(showBattery: Bool = false) -> NSImage {
+        return menuBarImage
+    }
+    
+    private func chargeColor(for percent: Int?) -> NSColor {
+        guard let p = percent else {
+            return NSColor.secondaryLabelColor.withAlphaComponent(0.4)
+        }
+        switch p {
+        case 60...100:
+            return NSColor.systemGreen
+        case 30..<60:
+            return NSColor.systemYellow
+        default:
+            return NSColor.systemRed
+        }
+    }
+    
+    private func generateMenuBarImage(state: BatteryState) -> NSImage {
         let leftPct = state.leftPercentage
         let isLeftCharging = state.isLeftCharging
         let rightPct = state.rightPercentage
@@ -412,131 +430,121 @@ extension BluetoothManager {
         }
         
         let fontConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        let budConfig = fontConfig.applying(NSImage.SymbolConfiguration(paletteColors: [NSColor.headerTextColor]))
         let boltConfig = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
+        let boltImg = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Charging")?
+            .withSymbolConfiguration(boltConfig)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [NSColor.systemYellow]))
+        let boltWidth: CGFloat = boltImg?.size.width ?? 6.0
         
-        func batterySymbol(for p: Int) -> String {
-            switch p {
-            case 90...100: return "battery.100"
-            case 65..<90: return "battery.75"
-            case 35..<65: return "battery.50"
-            case 10..<35: return "battery.25"
-            default: return "battery.0"
-            }
-        }
+        let dotSize: CGFloat = 4.0
+        let dotOverlap: CGFloat = 1.5
+        let extraDotW = max(0, dotSize - dotOverlap)
+        let pairSpacing: CGFloat = 2.0
         
-        struct DrawItem {
-            let image: NSImage
+        struct DeviceUnit {
+            let icon: NSImage
             let opacity: CGFloat
+            let dotColor: NSColor?
+            let isCharging: Bool
         }
         
-        var groups: [[DrawItem]] = []
+        var units: [DeviceUnit] = []
         
-        // Group 1: Left earbud
-        var leftGroup: [DrawItem] = []
-        if let img = NSImage(systemSymbolName: "earbud.left", accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
-            leftGroup.append(DrawItem(image: img, opacity: leftPct != nil ? 1.0 : 0.35))
+        // Unit 1: Left earbud
+        if let img = NSImage(systemSymbolName: "earbud.left", accessibilityDescription: "Left Earbud")?.withSymbolConfiguration(budConfig) {
+            units.append(DeviceUnit(
+                icon: img,
+                opacity: leftPct != nil ? 1.0 : 0.35,
+                dotColor: leftPct != nil ? chargeColor(for: leftPct) : nil,
+                isCharging: isLeftCharging
+            ))
         }
-        if isLeftCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
-            leftGroup.append(DrawItem(image: bolt, opacity: 1.0))
-        }
-        if showBattery, let l = leftPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: l), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
-            leftGroup.append(DrawItem(image: bImg, opacity: 1.0))
-        }
-        groups.append(leftGroup)
         
-        // Group 2: Right earbud
-        var rightGroup: [DrawItem] = []
-        if let img = NSImage(systemSymbolName: "earbud.right", accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
-            rightGroup.append(DrawItem(image: img, opacity: rightPct != nil ? 1.0 : 0.35))
+        // Unit 2: Right earbud
+        if let img = NSImage(systemSymbolName: "earbud.right", accessibilityDescription: "Right Earbud")?.withSymbolConfiguration(budConfig) {
+            units.append(DeviceUnit(
+                icon: img,
+                opacity: rightPct != nil ? 1.0 : 0.35,
+                dotColor: rightPct != nil ? chargeColor(for: rightPct) : nil,
+                isCharging: isRightCharging
+            ))
         }
-        if isRightCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
-            rightGroup.append(DrawItem(image: bolt, opacity: 1.0))
-        }
-        if showBattery, let r = rightPct, let bImg = NSImage(systemSymbolName: batterySymbol(for: r), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
-            rightGroup.append(DrawItem(image: bImg, opacity: 1.0))
-        }
-        groups.append(rightGroup)
         
-        // Group 3: Case (shown if open or charging)
+        // Unit 3: Case (shown if casePct != nil or isCaseCharging)
         if casePct != nil || isCaseCharging {
-            var caseGroup: [DrawItem] = []
-            if let caseImg = NSImage(systemSymbolName: "archivebox", accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
-                caseGroup.append(DrawItem(image: caseImg, opacity: 1.0))
-            }
-            if isCaseCharging, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?.withSymbolConfiguration(boltConfig) {
-                caseGroup.append(DrawItem(image: bolt, opacity: 1.0))
-            }
-            if showBattery, let c = casePct, let bImg = NSImage(systemSymbolName: batterySymbol(for: c), accessibilityDescription: nil)?.withSymbolConfiguration(fontConfig) {
-                caseGroup.append(DrawItem(image: bImg, opacity: 1.0))
-            }
-            groups.append(caseGroup)
-        }
-        
-        let innerSpacing: CGFloat = 1.0
-        func spacingAfterGroup(_ gIdx: Int) -> CGFloat {
-            if showBattery {
-                return 4.0
-            } else {
-                // When battery is not shown:
-                // Keep the left and right earbuds tightly together (1.0pt) so they appear as a paired unit
-                if gIdx == 0 {
-                    return 1.0
-                } else {
-                    return 4.0 // Spacing before the case icon
-                }
+            if let caseImg = NSImage(systemSymbolName: "archivebox", accessibilityDescription: "Case")?.withSymbolConfiguration(budConfig) {
+                units.append(DeviceUnit(
+                    icon: caseImg,
+                    opacity: casePct != nil ? 1.0 : 0.35,
+                    dotColor: casePct != nil ? chargeColor(for: casePct) : nil,
+                    isCharging: isCaseCharging
+                ))
             }
         }
         
+        // Calculate total width
         var totalWidth: CGFloat = 0
-        var maxHeight: CGFloat = 16.0
-        
-        for (gIdx, group) in groups.enumerated() {
-            for (iIdx, item) in group.enumerated() {
-                totalWidth += item.image.size.width
-                maxHeight = max(maxHeight, item.image.size.height)
-                if iIdx < group.count - 1 {
-                    totalWidth += innerSpacing
-                }
+        for (idx, u) in units.enumerated() {
+            totalWidth += u.icon.size.width + (u.dotColor != nil ? extraDotW : 0)
+            if u.isCharging {
+                totalWidth += 1.0 + boltWidth
             }
-            if gIdx < groups.count - 1 {
-                totalWidth += spacingAfterGroup(gIdx)
+            if idx < units.count - 1 {
+                totalWidth += (idx == 0 ? pairSpacing : 4.0)
             }
         }
         
-        let finalSize = NSSize(width: max(16.0, ceil(totalWidth)), height: ceil(maxHeight))
+        let finalSize = NSSize(width: max(16.0, ceil(totalWidth)), height: 16.0)
         let result = NSImage(size: finalSize, flipped: false) { rect in
-            var currentX: CGFloat = 0
-            for (gIdx, group) in groups.enumerated() {
-                for (iIdx, item) in group.enumerated() {
-                    let y = (rect.height - item.image.size.height) / 2.0
-                    let targetRect = NSRect(x: currentX, y: y, width: item.image.size.width, height: item.image.size.height)
-                    item.image.draw(in: targetRect, from: .zero, operation: .sourceOver, fraction: item.opacity)
-                    currentX += item.image.size.width
-                    if iIdx < group.count - 1 {
-                        currentX += innerSpacing
-                    }
+            var curX: CGFloat = 0
+            for (idx, u) in units.enumerated() {
+                // Draw uncolored bud icon
+                let yIcon = (rect.height - u.icon.size.height) / 2.0
+                let iconRect = NSRect(x: curX, y: yIcon, width: u.icon.size.width, height: u.icon.size.height)
+                u.icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: u.opacity)
+                
+                // Draw small colored charge indicator dot at top-right of device
+                if let dotCol = u.dotColor {
+                    let dotX = curX + u.icon.size.width - dotOverlap
+                    let dotY = rect.height - dotSize - 1.0
+                    let dotRect = NSRect(x: dotX, y: dotY, width: dotSize, height: dotSize)
+                    
+                    // Subtle background cutout for clear contrast
+                    NSColor.black.withAlphaComponent(0.4).setFill()
+                    NSBezierPath(ovalIn: dotRect.insetBy(dx: -0.5, dy: -0.5)).fill()
+                    
+                    dotCol.setFill()
+                    NSBezierPath(ovalIn: dotRect).fill()
                 }
-                if gIdx < groups.count - 1 {
-                    currentX += spacingAfterGroup(gIdx)
+                
+                curX += u.icon.size.width + (u.dotColor != nil ? extraDotW : 0)
+                
+                // Draw charging bolt if actively charging
+                if u.isCharging, let bolt = boltImg {
+                    curX += 1.0
+                    let bY = (rect.height - bolt.size.height) / 2.0
+                    bolt.draw(in: NSRect(x: curX, y: bY, width: bolt.size.width, height: bolt.size.height))
+                    curX += bolt.size.width
+                }
+                
+                if idx < units.count - 1 {
+                    curX += (idx == 0 ? pairSpacing : 4.0)
                 }
             }
             return true
         }
-        result.isTemplate = true
+        result.isTemplate = false
         return result
     }
 }
 
-// MARK: - Menu Bar Hover & Status Item
+// MARK: - Menu Bar Status Item Management
 extension BluetoothManager {
     public func startHoverMonitoring() {
-        guard hoverTimer == nil else { return }
-        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
-            self?.checkMenuBarHover()
-        }
-        if let hoverTimer = hoverTimer {
-            RunLoop.main.add(hoverTimer, forMode: .common)
-        }
+        // Battery level icons on hover have been replaced with charge status colors.
+        hoverTimer?.invalidate()
+        hoverTimer = nil
     }
     
     private func findStatusButton() -> NSStatusBarButton? {
@@ -557,61 +565,15 @@ extension BluetoothManager {
         return nil
     }
     
-    private func checkMenuBarHover() {
-        if statusButton == nil {
-            statusButton = findStatusButton()
-            statusButton?.toolTip = "Nothing Ear (Click to open menu)"
-        }
-        guard let btn = statusButton, let window = btn.window else { return }
-        
-        // Track the last valid screen frame (origin.y > 100).
-        // During NSStatusBarButton image resizing, window.frame is momentarily at (0, -34),
-        // so we must never overwrite lastValidFrame with an offscreen layout-pass frame.
-        let frame = window.frame
-        if frame.origin.y > 100 && frame.width > 0 {
-            lastValidFrame = frame
-        }
-        guard lastValidFrame.origin.y > 100 else { return }
-        
-        let mouseLoc = NSEvent.mouseLocation
-        let detectionRect = isHovered ? lastValidFrame.insetBy(dx: -4, dy: -4) : lastValidFrame
-        let isInside = detectionRect.contains(mouseLoc)
-        
-        if isInside {
-            hoverExitCount = 0
-            if !isHovered {
-                hoverEnterCount += 1
-                // Require ~180ms (6 ticks of 30ms) of deliberate hover before revealing
-                if hoverEnterCount >= 6 {
-                    isHovered = true
-                    hoverEnterCount = 0
-                    let updated = self.menuBarImage(showBattery: true)
-                    btn.image = updated
-                }
-            }
-        } else {
-            hoverEnterCount = 0
-            if isHovered {
-                hoverExitCount += 1
-                // Require ~180ms of cursor absence before collapsing to prevent accidental collapse
-                if hoverExitCount >= 6 {
-                    isHovered = false
-                    hoverExitCount = 0
-                    let updated = self.menuBarImage(showBattery: false)
-                    btn.image = updated
-                }
-            }
-        }
-    }
-    
     public func updateStatusButtonImage() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             if self.statusButton == nil {
                 self.statusButton = self.findStatusButton()
+                self.statusButton?.toolTip = "Nothing Ear"
             }
             if let btn = self.statusButton {
-                btn.image = self.menuBarImage(showBattery: self.isHovered)
+                btn.image = self.menuBarImage
             }
         }
     }

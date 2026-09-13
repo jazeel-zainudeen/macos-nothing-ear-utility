@@ -25,6 +25,6 @@ struct MenuBarIconView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     
     var body: some View {
-        Image(nsImage: bluetoothManager.menuBarImage(showBattery: bluetoothManager.isHovered))
+        Image(nsImage: bluetoothManager.menuBarImage)
     }
 }
